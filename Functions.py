@@ -127,6 +127,16 @@ def insolation(latitude, true_longitude, solar_constant, eccentricity,
             second_term = h0 * np.sin(latitude) * sin_delta + np.cos(latitude) * cos_delta * np.sin(h0)
             return solar_constant * rho / np.pi * second_term
    
+def calc_insolation(y_lat, true_longitudes, solar_constant=1371.685,    
+                       eccentricity=0.0, obliquity=0.409253,
+                       precession_distance=1.783037):
+    nlatitude = y_lat.size
+    
+    return np.array([[insolation(y_lat[j], true_longitude, solar_constant, eccentricity,
+                   obliquity, precession_distance)
+                       for true_longitude in true_longitudes]
+                     for j in range(nlatitude)])
+
 def calc_solar_forcing(y_lat,albedo, true_longitudes, solar_constant=1371.685,    
                        eccentricity=0.0, obliquity=0.409253,
                        precession_distance=1.783037):

@@ -228,19 +228,22 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
     jacobian_ocn = sparse.csc_matrix(jacobian_ocn)
     jacobian_ocn = sparse.linalg.factorized(eye - delta_t * jacobian_ocn)
     
+    # Compute insolation
+    insolation = Functions.calc_insolation(phi, true_longitude)
+    
+    timer = Timer()
     for i in range(max_iterations):
         print(i)
-        
+        timer.start()
         for t in range(ntimesteps):    
             #print(t)
+            
             phi_index_s[t], phi_i_s, phi_index_n[t], phi_i_n = ice_edge(H_I[:,t-1], phi)  # neuer Ice_Edge Index 
-              
+            
             albedo_ocn = OCN_fct.calc_albedo(phi, phi_i_n, phi_i_s, mesh)
             
-            solar_forcing_ocn  = Functions.calc_solar_forcing(phi, albedo_ocn, true_longitude)[:,t-1]
+            solar_forcing_ocn  = insolation[:,t-1] * albedo_ocn
             #solar_forcing_ocn = np.multiply(solar_forcing_paper[:,t-1], albedo_ocn)
-            
-  
    
             T_ATM[:,t] =   ATM_fct.timestep_euler_backward_atm(jacobian_atm, 1 / ntimesteps, T_ATM[:,t-1], T_S[:,t-1], t, mesh, P_atm.heat_capacity)
             
@@ -262,7 +265,7 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
             temp_s[t] = np.mean(T_S[:,t])
             
        
-        
+        timer.stop("one year")
         avg_temperature_atm = np.sum(temp_atm) / ntimesteps
         avg_temperature_ocn = np.sum(temp_ocn) / ntimesteps
         avg_temperature_s = np.sum(temp_s) / ntimesteps
