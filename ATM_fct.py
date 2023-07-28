@@ -42,11 +42,7 @@ def timestep_euler_forward_atm(T_ATM, t, delta_t, mesh,  heat_capacity, T_S):
     return T_ATM_new
 
     
-def timestep_euler_backward_atm(jacobian, delta_t,  T_ATM, T_S, t,  mesh, heat_capacity):
-    m, n = jacobian.shape
-    eye = sparse.eye(m, n, format="csc")
-    jacobian = sparse.csc_matrix(jacobian)
-    solve = sparse.linalg.factorized(eye - delta_t * jacobian)    
+def timestep_euler_backward_atm(solve, delta_t,  T_ATM, T_S, t,  mesh, heat_capacity): 
 
     source_terms = (mesh.A_up - mesh.A_dn - mesh.A_olr  + mesh.B_up * T_S) / heat_capacity 
    # print( delta_t *(mesh.A_up - mesh.A_dn - mesh.A_olr  + mesh.B_up * T_S) / heat_capacity )

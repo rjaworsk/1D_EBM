@@ -174,9 +174,20 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
     Fb = OCN_fct.BasalFlux(phi)
     Hml = P_ocn.Hml_const * np.ones(len(phi))
     
+    # Construct and factorize Jacobian for the atmosphere
     jacobian_atm = ATM_fct.calc_jacobian_atm(mesh, diffusion_coeff_atm, P_atm.heat_capacity, phi)
+    m, n = jacobian_atm.shape
+    eye = sparse.eye(m, n, format="csc")
+    jacobian_atm = sparse.csc_matrix(jacobian_atm)
+    jacobian_atm = sparse.linalg.factorized(eye - delta_t * jacobian_atm)   
+    
+    # Construct and factorize Jacobian for the ocean
     jacobian_ocn = OCN_fct.calc_jacobian_ocn(mesh, diffusion_coeff_ocn, heat_capacity_ocn, phi)
-
+    m, n = jacobian_ocn.shape
+    eye = sparse.eye(m, n, format="csc")
+    jacobian_ocn = sparse.csc_matrix(jacobian_ocn)
+    jacobian_ocn = sparse.linalg.factorized(eye - delta_t * jacobian_ocn)
+    
     for i in range(max_iterations):
         print(i)
         

@@ -78,11 +78,8 @@ def timestep_euler_forward_ocn(T_OCN, t, delta_t, mesh, heat_capacity, solar_for
     T_OCN_New = T_OCN + delta_t * ((solar_forcing - mesh.A_up - mesh.B_up * T_S + mesh.A_dn + mesh.B_dn * T_ATM + Fb)/ heat_capacity) * (H_I<= 0)
     return T_OCN_New
 
-def timestep_euler_backward_ocn(jacobian, delta_t, T_OCN, T_S, T_ATM, t, mesh, heat_capacity, solar_forcing, F_b, H_I):
-    m, n = jacobian.shape
-    eye = sparse.eye(m, n, format="csc")
-    jacobian = sparse.csc_matrix(jacobian)
-    solve = sparse.linalg.factorized(eye - delta_t * jacobian)
+def timestep_euler_backward_ocn(solve, delta_t, T_OCN, T_S, T_ATM, t, mesh, heat_capacity, solar_forcing, F_b, H_I):
+    
     source_terms = ((solar_forcing - mesh.A_up - mesh.B_up *T_S + mesh.A_dn + mesh.B_dn * T_ATM + F_b) / heat_capacity) * (H_I <=0)
 
     T_OCN_New = solve(T_OCN + delta_t * source_terms)
