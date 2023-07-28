@@ -7,12 +7,9 @@ Created on Wed Jul  5 12:10:34 2023
 """
 
 
-import matplotlib.pyplot as plt
 import numpy as np
-import scipy
-
 from scipy import sparse
-from scipy import special
+
 
 import Functions
 
@@ -38,10 +35,10 @@ def calc_jacobian_atm(mesh, diffusion_coeff, heat_capacity, phi):
 
     return jacobian
 
-def timestep_euler_forward_atm(T_ATM, t, delta_t, mesh, diffusion_coeff, heat_capacity, T_S, phi):
+def timestep_euler_forward_atm(T_ATM, t, delta_t, mesh,  heat_capacity, T_S):
    
-    diffusion_op = Functions.calc_diffusion_operator(mesh, diffusion_coeff, T_ATM, phi)
-    T_ATM_new = T_ATM + delta_t/heat_capacity * (diffusion_op + mesh.A_up + mesh.B_up * T_S - mesh.A_dn - mesh.B_dn * T_ATM - mesh.A_olr -mesh.B_olr * T_ATM)
+   # diffusion_op = Functions.calc_diffusion_operator(mesh, diffusion_coeff, T_ATM, phi)
+    T_ATM_new = T_ATM + delta_t/heat_capacity * ( mesh.A_up + mesh.B_up * T_S - mesh.A_dn - mesh.B_dn * T_ATM - mesh.A_olr -mesh.B_olr * T_ATM)
     return T_ATM_new
 
     

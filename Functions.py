@@ -8,11 +8,7 @@ Created on Wed Jul  5 08:43:09 2023
 
 import matplotlib.pyplot as plt
 import numpy as np
-import scipy
-
-from scipy import sparse
-from scipy import special
-
+from numba import njit
 
 def read_geography(filepath):
     return np.genfromtxt(filepath, dtype=np.int8)
@@ -130,9 +126,9 @@ def insolation(latitude, true_longitude, solar_constant, eccentricity,
             h0 = np.arccos(z)
             second_term = h0 * np.sin(latitude) * sin_delta + np.cos(latitude) * cos_delta * np.sin(h0)
             return solar_constant * rho / np.pi * second_term
-        
-def calc_solar_forcing(albedo, true_longitudes, solar_constant=1371.685,    
-                       eccentricity=0.01674, obliquity=0.409253,
+   
+def calc_solar_forcing(y_lat,albedo, true_longitudes, solar_constant=1371.685,    
+                       eccentricity=0.0, obliquity=0.409253,
                        precession_distance=1.783037):
     def solar_forcing(theta, true_longitude, albedo_loc):
         s = insolation(theta, true_longitude, solar_constant, eccentricity,
@@ -143,14 +139,15 @@ def calc_solar_forcing(albedo, true_longitudes, solar_constant=1371.685,
 
     # Latitude values at the grid points
     nlatitude = albedo.size
-    y_lat = np.linspace( 0,np.pi/2 , nlatitude)
+    #y_lat = np.linspace( 0,np.pi/2 , nlatitude)
 
     return np.array([[solar_forcing(y_lat[j], true_longitude, albedo[j])
                        for true_longitude in true_longitudes]
                      for j in range(nlatitude)])      
 
 
-def calc_diffusion_operator_(mesh, diffusion_coeff, temperature, phi):
+
+def calc_diffusion_operator__(mesh, diffusion_coeff, temperature, phi):
     h = mesh.h
     n_latitude = mesh.n_latitude
     n_longitude = mesh.n_longitude
@@ -159,7 +156,7 @@ def calc_diffusion_operator_(mesh, diffusion_coeff, temperature, phi):
 
     return calc_diffusion_operator_inner(h, n_latitude, n_longitude, csc2, cot, diffusion_coeff, temperature, phi)
 
-def calc_diffusion_operator_inner(h, n_latitude, n_longitude, csc2, cot, diffusion_coeff, temperature, phi):
+def calc_diffusion_operator_inner__(h, n_latitude, n_longitude, csc2, cot, diffusion_coeff, temperature, phi):
     result = np.zeros(diffusion_coeff.size)
 
     # North Pole
@@ -185,13 +182,20 @@ def calc_diffusion_operator_inner(h, n_latitude, n_longitude, csc2, cot, diffusi
 
     return result
 
-def calc_diffusion_operator(mesh,  D,temperature, phi):
+def calc_diffusion_operator(mesh,  D, temperature, phi):
+    n_latitude = mesh.n_latitude
+    h = mesh.h
+    RE = mesh.RE
+    return calc_diffusion_operator_inner(n_latitude, h, RE,  D, temperature, phi)
     
-    delta_phi = np.pi/(mesh.n_latitude-1)
+@njit
+def calc_diffusion_operator_inner(n_latitude, h, RE,  D, temperature, phi):
+    
+    delta_phi = np.pi/(n_latitude-1)
     op = np.zeros(phi.size)
-    area = 0.5 * (1-np.cos(0.5*delta_phi))
-    op[0] = 0 #np.sin(delta_phi/2)/(4*np.pi * area) * D[1] # Äquator 
-    op[-1] = 0 # np.sin(delta_phi/2)/(4*np.pi * area) * D[1] * (temperature[1] - temperature[0])  #north pole --> zero flux boundary condition
+    op[0] = RE**2 *  2 * np.pi * D[1] * np.sin(h/2) * (temperature[1]- temperature[0] )/h   #0  # Äquator 
+    op[-1]= RE**2 * 2 * np.pi  * D[1] * np.sin(h/2) * (temperature[-2]- temperature[-1] )/h #0  #north pole --> zero flux boundary condition
+
     for j in range(1,phi.size-1):
         op[j] = D[j] * ((temperature[j+1] - 2 * temperature[j] + temperature[j-1])/(delta_phi**2) -  np.tan(phi[j]) * (temperature[j+1] - temperature[j-1])/(2*delta_phi))
     return op
@@ -207,11 +211,90 @@ def plot_annual_temperature(annual_temperature, average_temperature, title):
     plt.plot(annual_temperature, label="annual temperature")
 
     plt.xlim((0, ntimesteps - 1))
-    labels = ["Äquator" ,  "Nrd.Wendekreis", "Nrd.Halbkugel","Nrd. Polarkreis", "Northpole"  ]
+    labels = ["Südpol", "Sdl. Halbkugel",   "Äquator" ,   "Nrd.Halbkugel", "Nordpol"  ]
     plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
     ax.set_ylabel("surface temperature [Â°C]")
     plt.grid()
     plt.title(title)
+    plt.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()
+    
+    
+def plot_over_time(annual_temperature, average_temperature, title):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_temperature)
+    plt.plot(average_temperature * np.ones(ntimesteps), label="average temperature")
+    plt.plot(annual_temperature, label="annual temperature")
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["March" , "Mai", "July", "Sep.", "Nov." , "Jan." ]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 6), labels)
+    ax.set_ylabel("surface temperature [Â°C]")
+    plt.grid()
+    plt.title(title)
+    plt.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()
+
+def calc_mean_1D(data, area):
+    nlatitude = data.size
+    
+    mean_data = area[0] * data[0] + area[-1] * data[-1]
+    for i in range(1, nlatitude - 1):
+            mean_data += area[i] * data[i] 
+
+    return mean_data 
+
+def calc_area(n_latitude):
+    area = np.zeros(n_latitude, dtype=np.float64)
+    delta_theta = np.pi / (n_latitude - 1)
+
+    # Poles
+    area[0] = area[-1] = 0.5 * (1 - np.cos(0.5 * delta_theta))
+
+    # Inner cells
+    for j in range(1, n_latitude - 1):
+        area[j] = np.sin(0.5 * delta_theta) * np.sin(delta_theta * j) 
+
+    return area
+
+
+def calc_lambda(dt = 1.0 / 48,  nt=48, ecc= 0.016740, per = 1.783037):
+    eccfac = 1.0 - ecc**2
+    rzero  = (2.0*np.pi)/eccfac**1.5
+  
+    lambda_ = np.zeros(nt)
+    
+    for n in range(1, nt):  #hier plus 2??
+    
+      nu = lambda_[n-1] - per
+      t1 = dt*(rzero*(1.0 - ecc * np.cos(nu))**2)
+      t2 = dt*(rzero*(1.0 - ecc * np.cos(nu+0.5*t1))**2)
+      t3 = dt*(rzero*(1.0 - ecc * np.cos(nu+0.5*t2))**2)
+      t4 = dt*(rzero*(1.0 - ecc * np.cos(nu + t3))**2)
+      lambda_[n] = lambda_[n-1] + (t1 + 2.0*t2 + 2.0*t3 + t4)/6.0
+
+    return lambda_
+
+def plot_annual_temperature_vgl(annual_temperature_og,  annual_temperature_paper):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_temperature_og)
+    plt.plot(annual_temperature_og, label="temperature (total)")
+    plt.plot(annual_temperature_paper, label="temperature paper")
+   
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["March", "June", "September", "December", "March"]
+    #labels = ["Südpol", "Sdl. Halbkugel",   "Äquator" ,   "Nrd.Halbkugel", "Nordpol"  ]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("surface temperature [Â°C]")
+    plt.grid()
+    plt.title("Annual temperature ")
     plt.legend(loc="upper right")
 
     plt.tight_layout()

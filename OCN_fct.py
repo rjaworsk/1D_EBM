@@ -17,12 +17,28 @@ from scipy import special
 import Functions
 
 
-def calc_albedo(phi, phi_i): #Berechung des Coalbedo, wobei phi der Breitengrad und phi_i der Breitengrad der südlichsten Eisschicht ist
+def calc_albedo(phi, phi_i_n, phi_i_s, mesh): #Berechung des Coalbedo, wobei phi der Breitengrad und phi_i der Breitengrad der südlichsten Eisschicht ist
     a0 = 0.72
     ai = 0.36
     a2 = (a0 - ai)/((np.pi/2)**2)
+    equator = int((mesh.n_latitude - 1) / 2)
     
-    return 0.5 * ((a0-a2*phi**2 + ai) - (a0-a2*phi**2 - ai) * special.erf((phi-phi_i)/0.04))
+    north_h =  0.5 * ((a0-a2*phi[equator:(len(phi))]**2 + ai) - (a0-a2*phi[equator:len(phi)]**2 - ai) * special.erf((phi[equator:len(phi)]-phi_i_n)/0.04))
+    
+    south_h = 0.5 * ((a0-a2*phi[0:equator]**2 + ai) - (a0-a2*phi[0:equator]**2 - ai) * special.erf((phi_i_s-phi[0:equator])/0.04))
+    
+    return np.concatenate(( south_h, north_h))
+
+
+def calc_albedo_n(phi, phi_i_n): #Berechung des Coalbedo, wobei phi der Breitengrad und phi_i der Breitengrad der südlichsten Eisschicht ist
+    a0 = 0.72
+    ai = 0.36
+    a2 = (a0 - ai)/((np.pi/2)**2)
+   
+    
+    return    0.5 * ((a0-a2*phi**2 + ai) - (a0-a2*phi**2 - ai) * special.erf((phi-phi_i_n)/0.04))
+
+
 
 
 def BasalFlux(phi):
@@ -55,10 +71,11 @@ def calc_jacobian_ocn(mesh, diffusion_coeff, heat_capacity, phi):
 
     return jacobian
 
-def timestep_euler_forward_ocn(T_OCN, t, delta_t, mesh, diffusion_coeff, heat_capacity, solar_forcing, Fb, T_S, T_ATM, H_I , phi):
+def timestep_euler_forward_ocn(T_OCN, t, delta_t, mesh, heat_capacity, solar_forcing, Fb, T_S, T_ATM, H_I):
     # Note that this function modifies the first argument instead of returning the result
-    diffusion_op = Functions.calc_diffusion_operator(mesh, diffusion_coeff, T_OCN, phi)
-    T_OCN_New = T_OCN + delta_t * ((diffusion_op +solar_forcing - mesh.A_up - mesh.B_up * T_S + mesh.A_dn + mesh.B_dn * T_ATM + Fb)/ heat_capacity) * (H_I<= 0)
+    #diffusion_op = Functions.calc_diffusion_operator(mesh, diffusion_coeff, T_OCN, phi)
+    
+    T_OCN_New = T_OCN + delta_t * ((solar_forcing - mesh.A_up - mesh.B_up * T_S + mesh.A_dn + mesh.B_dn * T_ATM + Fb)/ heat_capacity) * (H_I<= 0)
     return T_OCN_New
 
 def timestep_euler_backward_ocn(jacobian, delta_t, T_OCN, T_S, T_ATM, t, mesh, heat_capacity, solar_forcing, F_b, H_I):
