@@ -63,7 +63,47 @@ class P_ocn:
         self.c_O = 1.27E-4  #Ocean specific heat capacity [W yr kg^-1 degC^-1]
         self.rhoo = 1025    #Density of sea water [kg m^-3]
         self.Hml_const = 75 #Mixed-layer depth when set constant [m]
-        
+
+class TimerError(Exception):
+
+    """A custom exception used to report errors in use of Timer class"""
+
+class Timer:
+    
+    """ Timer class from https://realpython.com/python-timer/#python-timer-functions """
+    
+    def __init__(self):
+
+        self._start_time = None
+
+
+    def start(self):
+
+        """Start a new timer"""
+
+        if self._start_time is not None:
+
+            raise TimerError(f"Timer is running. Use .stop() to stop it")
+
+
+        self._start_time = time.perf_counter()
+
+
+    def stop(self, text=""):
+
+        """Stop the timer, and report the elapsed time"""
+
+        if self._start_time is None:
+
+            raise TimerError(f"Timer is not running. Use .start() to start it")
+
+
+        elapsed_time = time.perf_counter() - self._start_time
+
+        self._start_time = None
+
+        print("Elapsed time ("+text+f"): {elapsed_time:0.10e} seconds")
+
 @njit   
 def ice_edge(H_I, phi):    
         if H_I[len(H_I)-1] == 0: 
