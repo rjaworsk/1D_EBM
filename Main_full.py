@@ -63,7 +63,47 @@ class P_ocn:
         self.c_O = 1.27E-4  #Ocean specific heat capacity [W yr kg^-1 degC^-1]
         self.rhoo = 1025    #Density of sea water [kg m^-3]
         self.Hml_const = 75 #Mixed-layer depth when set constant [m]
-        
+
+class TimerError(Exception):
+
+    """A custom exception used to report errors in use of Timer class"""
+
+class Timer:
+    
+    """ Timer class from https://realpython.com/python-timer/#python-timer-functions """
+    
+    def __init__(self):
+
+        self._start_time = None
+
+
+    def start(self):
+
+        """Start a new timer"""
+
+        if self._start_time is not None:
+
+            raise TimerError(f"Timer is running. Use .stop() to stop it")
+
+
+        self._start_time = time.perf_counter()
+
+
+    def stop(self, text=""):
+
+        """Stop the timer, and report the elapsed time"""
+
+        if self._start_time is None:
+
+            raise TimerError(f"Timer is not running. Use .start() to start it")
+
+
+        elapsed_time = time.perf_counter() - self._start_time
+
+        self._start_time = None
+
+        print("Elapsed time ("+text+f"): {elapsed_time:0.10e} seconds")
+
 @njit   
 def ice_edge(H_I, phi):    
         if H_I[len(H_I)-1] == 0: 
@@ -174,22 +214,36 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
     Fb = OCN_fct.BasalFlux(phi)
     Hml = P_ocn.Hml_const * np.ones(len(phi))
     
+    # Construct and factorize Jacobian for the atmosphere
     jacobian_atm = ATM_fct.calc_jacobian_atm(mesh, diffusion_coeff_atm, P_atm.heat_capacity, phi)
+    m, n = jacobian_atm.shape
+    eye = sparse.eye(m, n, format="csc")
+    jacobian_atm = sparse.csc_matrix(jacobian_atm)
+    jacobian_atm = sparse.linalg.factorized(eye - delta_t * jacobian_atm)   
+    
+    # Construct and factorize Jacobian for the ocean
     jacobian_ocn = OCN_fct.calc_jacobian_ocn(mesh, diffusion_coeff_ocn, heat_capacity_ocn, phi)
-
+    m, n = jacobian_ocn.shape
+    eye = sparse.eye(m, n, format="csc")
+    jacobian_ocn = sparse.csc_matrix(jacobian_ocn)
+    jacobian_ocn = sparse.linalg.factorized(eye - delta_t * jacobian_ocn)
+    
+    # Compute insolation
+    insolation = Functions.calc_insolation(phi, true_longitude)
+    
+    timer = Timer()
     for i in range(max_iterations):
         print(i)
-        
+        timer.start()
         for t in range(ntimesteps):    
             #print(t)
+            
             phi_index_s[t], phi_i_s, phi_index_n[t], phi_i_n = ice_edge(H_I[:,t-1], phi)  # neuer Ice_Edge Index 
-              
+            
             albedo_ocn = OCN_fct.calc_albedo(phi, phi_i_n, phi_i_s, mesh)
             
-            solar_forcing_ocn  = Functions.calc_solar_forcing(phi, albedo_ocn, true_longitude)[:,t-1]
+            solar_forcing_ocn  = insolation[:,t-1] * albedo_ocn
             #solar_forcing_ocn = np.multiply(solar_forcing_paper[:,t-1], albedo_ocn)
-            
-  
    
             T_ATM[:,t] =   ATM_fct.timestep_euler_backward_atm(jacobian_atm, 1 / ntimesteps, T_ATM[:,t-1], T_S[:,t-1], t, mesh, P_atm.heat_capacity)
             
@@ -211,7 +265,7 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
             temp_s[t] = np.mean(T_S[:,t])
             
        
-        
+        timer.stop("one year")
         avg_temperature_atm = np.sum(temp_atm) / ntimesteps
         avg_temperature_ocn = np.sum(temp_ocn) / ntimesteps
         avg_temperature_s = np.sum(temp_s) / ntimesteps
@@ -236,9 +290,9 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
 # Run code
 if __name__ == '__main__':
     start = time.time()
-    file_path_lambda  = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/True_Longitude.dat.txt'     
-    file_path = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/The_World128x65.dat.txt'  
-    geo_dat_ = Functions.read_geography("/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/The_World128x65.dat.txt")
+    #file_path_lambda  = 'input/True_Longitude.dat'     
+    file_path = 'input/The_World128x65.dat'  
+    geo_dat_ = Functions.read_geography("input/The_World128x65.dat")
     
     ntimesteps = 48
     dt = 1/ ntimesteps
