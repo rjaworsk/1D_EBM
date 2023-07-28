@@ -205,8 +205,8 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
        
 # Run code
 if __name__ == '__main__':
-    file_path_lambda  = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/True_Longitude.dat.txt'     
-    file_path = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/The_World128x65.dat.txt'  
+    file_path_lambda  = 'input/True_Longitude.dat'     
+    file_path = 'input/The_World128x65.dat'  
   
     true_longitude = Functions.read_true_longitude(file_path_lambda)
     ntimesteps = len(true_longitude)

@@ -236,9 +236,9 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
 # Run code
 if __name__ == '__main__':
     start = time.time()
-    file_path_lambda  = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/True_Longitude.dat.txt'     
-    file_path = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/The_World128x65.dat.txt'  
-    geo_dat_ = Functions.read_geography("/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/The_World128x65.dat.txt")
+    #file_path_lambda  = 'input/True_Longitude.dat'     
+    file_path = 'input/The_World128x65.dat'  
+    geo_dat_ = Functions.read_geography("input/The_World128x65.dat")
     
     ntimesteps = 48
     dt = 1/ ntimesteps
