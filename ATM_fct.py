@@ -8,8 +8,6 @@ Created on Wed Jul  5 12:10:34 2023
 
 
 import numpy as np
-from scipy import sparse
-
 
 import Functions
 
@@ -35,21 +33,11 @@ def calc_jacobian_atm(mesh, diffusion_coeff, heat_capacity, phi):
 
     return jacobian
 
-def timestep_euler_forward_atm(T_ATM, t, delta_t, mesh,  heat_capacity, T_S):
-   
-   # diffusion_op = Functions.calc_diffusion_operator(mesh, diffusion_coeff, T_ATM, phi)
-    T_ATM_new = T_ATM + delta_t/heat_capacity * ( mesh.A_up + mesh.B_up * T_S - mesh.A_dn - mesh.B_dn * T_ATM - mesh.A_olr -mesh.B_olr * T_ATM)
-    return T_ATM_new
 
     
-def timestep_euler_backward_atm(jacobian, delta_t,  T_ATM, T_S, t,  mesh, heat_capacity):
-    m, n = jacobian.shape
-    eye = sparse.eye(m, n, format="csc")
-    jacobian = sparse.csc_matrix(jacobian)
-    solve = sparse.linalg.factorized(eye - delta_t * jacobian)    
+def timestep_euler_backward_atm(solve, delta_t,  T_ATM, T_S, t,  mesh, heat_capacity): 
 
     source_terms = (mesh.A_up - mesh.A_dn - mesh.A_olr  + mesh.B_up * T_S) / heat_capacity 
-   # print( delta_t *(mesh.A_up - mesh.A_dn - mesh.A_olr  + mesh.B_up * T_S) / heat_capacity )
     T_ATM_New = solve((T_ATM + delta_t * source_terms))
     return T_ATM_New
     

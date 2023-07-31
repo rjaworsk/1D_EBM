@@ -127,6 +127,16 @@ def insolation(latitude, true_longitude, solar_constant, eccentricity,
             second_term = h0 * np.sin(latitude) * sin_delta + np.cos(latitude) * cos_delta * np.sin(h0)
             return solar_constant * rho / np.pi * second_term
    
+def calc_insolation(y_lat, true_longitudes, solar_constant=1371.685,    
+                       eccentricity=0.0, obliquity=0.409253,
+                       precession_distance=1.783037):
+    nlatitude = y_lat.size
+    
+    return np.array([[insolation(y_lat[j], true_longitude, solar_constant, eccentricity,
+                   obliquity, precession_distance)
+                       for true_longitude in true_longitudes]
+                     for j in range(nlatitude)])
+
 def calc_solar_forcing(y_lat,albedo, true_longitudes, solar_constant=1371.685,    
                        eccentricity=0.0, obliquity=0.409253,
                        precession_distance=1.783037):
@@ -222,32 +232,58 @@ def plot_annual_temperature(annual_temperature, average_temperature, title):
     plt.show()
     
     
-def plot_over_time(annual_temperature, average_temperature, title):
+def plot_annual_ice_thickness(annual_ice_thickness, average_ice_thickness, title):
     fig, ax = plt.subplots()
 
-    ntimesteps = len(annual_temperature)
-    plt.plot(average_temperature * np.ones(ntimesteps), label="average temperature")
-    plt.plot(annual_temperature, label="annual temperature")
+    ntimesteps = len(annual_ice_thickness)
+    plt.plot(average_ice_thickness * np.ones(ntimesteps), label="average ice thickness")
+    plt.plot(annual_ice_thickness, label="annual ice thickness")
 
     plt.xlim((0, ntimesteps - 1))
-    labels = ["March" , "Mai", "July", "Sep.", "Nov." , "Jan." ]
-    plt.xticks(np.linspace(0, ntimesteps - 1, 6), labels)
-    ax.set_ylabel("surface temperature [Â°C]")
+    labels = ["Südpol", "Sdl. Halbkugel",   "Äquator" ,   "Nrd.Halbkugel", "Nordpol"  ]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("Hi")
     plt.grid()
     plt.title(title)
     plt.legend(loc="upper right")
 
     plt.tight_layout()
-    plt.show()
+    plt.show()    
+    
+
 
 def calc_mean_1D(data, area):
     nlatitude = data.size
     
-    mean_data = area[0] * data[0] + area[-1] * data[-1]
+    mean_data = area[0] * data[0] 
     for i in range(1, nlatitude - 1):
             mean_data += area[i] * data[i] 
 
     return mean_data 
+
+
+def calc_mean_1D_north_H_I(data, area):
+    nlatitude = data.size
+    mean_data = 0
+    j = 0
+    for i in range(361,nlatitude):
+        if (np.isnan(data[i]) == False):
+            mean_data += area[i] * data[i]  
+            j +=1
+    Area_normalized = 1/np.sum(area[nlatitude-j:nlatitude]) #Area normalization is different due to a different array size
+    return mean_data * Area_normalized
+
+def calc_mean_1D_south_H_I(data, area):
+    nlatitude = data.size
+    mean_data = 0
+    j = 0
+    for i in range(0,361):
+        if (np.isnan(data[i]) == False):
+            mean_data += area[i] * data[i]  
+            j +=1
+    Area_normalized = 1/np.sum(area[nlatitude-j:nlatitude]) #Area normalization is different due to a different array size
+    return mean_data * Area_normalized
+
 
 def calc_area(n_latitude):
     area = np.zeros(n_latitude, dtype=np.float64)
@@ -263,7 +299,7 @@ def calc_area(n_latitude):
     return area
 
 
-def calc_lambda(dt = 1.0 / 48,  nt=48, ecc= 0.016740, per = 1.783037):
+def calc_lambda(dt = 1.0 / 48,  nt=48, ecc= 0, per = 1.783037):
     eccfac = 1.0 - ecc**2
     rzero  = (2.0*np.pi)/eccfac**1.5
   
@@ -280,24 +316,142 @@ def calc_lambda(dt = 1.0 / 48,  nt=48, ecc= 0.016740, per = 1.783037):
 
     return lambda_
 
-def plot_annual_temperature_vgl(annual_temperature_og,  annual_temperature_paper):
+def plot_annual_T_S_vgl(annual_temperature_og,  annual_temperature_paper):
     fig, ax = plt.subplots()
 
     ntimesteps = len(annual_temperature_og)
-    plt.plot(annual_temperature_og, label="temperature (total)")
+    plt.plot(annual_temperature_og, label="temperature (EBM)")
     plt.plot(annual_temperature_paper, label="temperature paper")
+   
+
+    plt.xlim((0, ntimesteps - 1))
+    #labels = ["Äquator" ,"Nrd. Wendekreis", "Nrd. Polarkreis", "Nordpol"  ]
+    labels = ["0°", "18°", "36°" , "54°", "72°", "90°" ]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 6), labels)
+    ax.set_ylabel("surface temperature [Â°C]")
+    plt.grid()
+    plt.title("Comparison Surface temperature ")
+    plt.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()
+    
+def plot_annual_ice_thickness_vgl(annual_ice_thickness,  annual_ice_thickness_paper):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_ice_thickness)
+    plt.plot(annual_ice_thickness, label="Ice thickness (EBM)")
+    plt.plot(annual_ice_thickness_paper, label="Ice thickness (paper)")
    
 
     plt.xlim((0, ntimesteps - 1))
     labels = ["March", "June", "September", "December", "March"]
     #labels = ["Südpol", "Sdl. Halbkugel",   "Äquator" ,   "Nrd.Halbkugel", "Nordpol"  ]
     plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
-    ax.set_ylabel("surface temperature [Â°C]")
+    ax.set_ylabel("H_i")
     plt.grid()
-    plt.title("Annual temperature ")
+    plt.title("Comparison Ice Thickness")
     plt.legend(loc="upper right")
 
     plt.tight_layout()
-    plt.show()
+    plt.show()    
+    
+def plot_annual_ice_edge_vgl(annual_ice_edge, annual_ice_edge_paper):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_ice_edge)
+    plt.plot(annual_ice_edge, label="Ice-edge (EBM)")
+    plt.plot(annual_ice_edge_paper, label="Ice-edge (paper)")
+   
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["March", "June", "September", "December", "March"]
+    #labels = ["Südpol", "Sdl. Halbkugel",   "Äquator" ,   "Nrd.Halbkugel", "Nordpol"  ]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("$\phi$i")
+    #plt.rc('axes', labelsize = 20) #geht nicht für nur einen Plot?
+    plt.grid()
+    plt.title("Comparison Ice-edge")
+    plt.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()     
+    
+    
+    
+def plot_temperature_time(annual_temperature_total, average_temperature , titel):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_temperature_total)
+    plt.plot(annual_temperature_total, label="temperature (total)")
+    plt.plot(average_temperature * np.ones(ntimesteps), label="average temperature")
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["March", "June", "September", "December", "March"]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("surface temperature [Â°C]")
+    plt.grid()
+    plt.title(titel)
+    plt.legend(loc="upper right")
+    
+
+    plt.tight_layout()
+    plt.show()    
+    
+def plot_ice_edge_time(annual_ice_edge_total, average_ice_edge , titel):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_ice_edge_total)
+    plt.plot(annual_ice_edge_total, label="Ice-edge")
+    plt.plot(average_ice_edge  * np.ones(ntimesteps), label="average Ice-edge")
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["March", "June", "September", "December", "March"]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("$\phi$i (°N)")
+    #plt.rc('axes', labelsize = 20)
+    plt.grid()
+    plt.title(titel)
+    plt.legend(loc="upper right")
+    
+    plt.tight_layout()
+    plt.show()        
+    
+def plot_ice_thickness_time(annual_ice_thickness_total, average_ice_thickness, titel):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_ice_thickness_total)
+    plt.plot(annual_ice_thickness_total, label="ice thickness")
+    plt.plot(average_ice_thickness * np.ones(ntimesteps), label="average ice thickness")
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["March", "June", "September", "December", "March"]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("Hi")
+    plt.grid()
+    plt.title(titel)
+    plt.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()        
+    
+def plot_temperature_latitude(annual_temperature_total, average_temperature , titel):
+    fig, ax = plt.subplots()
+
+    ntimesteps = len(annual_temperature_total)
+    plt.plot(annual_temperature_total, label="temperature (total)")
+    plt.plot(average_temperature * np.ones(ntimesteps), label="average temperature")
+   
+
+    plt.xlim((0, ntimesteps - 1))
+    labels = ["Südpol", "Sdl. Halbkugel",   "Äquator" ,   "Nrd.Halbkugel", "Nordpol"  ]
+    plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
+    ax.set_ylabel("surface temperature [Â°C]")
+    plt.grid()
+    plt.title(titel)
+    plt.legend(loc="upper right")
+
+    plt.tight_layout()
+    plt.show()        
 
 
