@@ -35,9 +35,9 @@ def calc_jacobian_atm(mesh, diffusion_coeff, heat_capacity, phi):
 
 
     
-def timestep_euler_backward_atm(solve, delta_t,  T_ATM, T_S, t,  mesh, heat_capacity): 
+def timestep_euler_backward_atm(solve, delta_t,  T_ATM, T_S, t,  mesh, heat_capacity, F_w): 
 
-    source_terms = (mesh.A_up - mesh.A_dn - mesh.A_olr  + mesh.B_up * T_S) / heat_capacity 
+    source_terms = (mesh.A_up - mesh.A_dn - mesh.A_olr  + mesh.B_up * T_S + F_w) / heat_capacity 
     T_ATM_New = solve((T_ATM + delta_t * source_terms))
     return T_ATM_New
     

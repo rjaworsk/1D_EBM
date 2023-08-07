@@ -157,41 +157,6 @@ def calc_solar_forcing(y_lat,albedo, true_longitudes, solar_constant=1371.685,
 
 
 
-def calc_diffusion_operator__(mesh, diffusion_coeff, temperature, phi):
-    h = mesh.h
-    n_latitude = mesh.n_latitude
-    n_longitude = mesh.n_longitude
-    csc2 = mesh.csc2
-    cot = mesh.cot
-
-    return calc_diffusion_operator_inner(h, n_latitude, n_longitude, csc2, cot, diffusion_coeff, temperature, phi)
-
-def calc_diffusion_operator_inner__(h, n_latitude, n_longitude, csc2, cot, diffusion_coeff, temperature, phi):
-    result = np.zeros(diffusion_coeff.size)
-
-    # North Pole
-    result[0] = 0
-    
-    # South Pole
-    result[-1] = 0 
-    
-    for j in range(1, n_latitude - 1):
-
-            factor2 = 1 / h ** 2
-            term2 = factor2 * (-2 * diffusion_coeff[j] * temperature[j] + (diffusion_coeff[j] - 0.25 *
-                              (diffusion_coeff[j + 1] - diffusion_coeff[j - 1])) *
-                              temperature[j - 1]
-                              + (diffusion_coeff[j] + 0.25 *
-                                  (diffusion_coeff[j + 1] - diffusion_coeff[j - 1])) *
-                               temperature[j + 1])
-
-            term3 = cot[j-1] * diffusion_coeff[j] * 0.5 / h * (temperature[j + 1] - temperature[j - 1])
-
-            result[j] =  term2 + term3
-       
-
-    return result
-
 def calc_diffusion_operator(mesh,  D, temperature, phi):
     n_latitude = mesh.n_latitude
     h = mesh.h
@@ -203,7 +168,7 @@ def calc_diffusion_operator_inner(n_latitude, h, RE,  D, temperature, phi):
     
     delta_phi = np.pi/(n_latitude-1)
     op = np.zeros(phi.size)
-    op[0] = RE**2 *  2 * np.pi * D[1] * np.sin(h/2) * (temperature[1]- temperature[0] )/h   #0  # Äquator 
+    op[0] = RE**2 * 2 * np.pi * D[1] * np.sin(h/2) * (temperature[1]- temperature[0] )/h   #0  # Äquator 
     op[-1]= RE**2 * 2 * np.pi  * D[1] * np.sin(h/2) * (temperature[-2]- temperature[-1] )/h #0  #north pole --> zero flux boundary condition
 
     for j in range(1,phi.size-1):
@@ -251,12 +216,11 @@ def plot_annual_ice_thickness(annual_ice_thickness, average_ice_thickness, title
     plt.show()    
     
 
-
 def calc_mean_1D(data, area):
     nlatitude = data.size
     
-    mean_data = area[0] * data[0] 
-    for i in range(1, nlatitude - 1):
+    mean_data = 0
+    for i in range(0, nlatitude):
             mean_data += area[i] * data[i] 
 
     return mean_data 
@@ -266,16 +230,28 @@ def calc_mean_1D_north_H_I(data, area):
     nlatitude = data.size
     mean_data = 0
     j = 0
-    for i in range(361,nlatitude):
+    for i in range(360,nlatitude):
         if (np.isnan(data[i]) == False):
             mean_data += area[i] * data[i]  
-            j +=1
+            j +=1        
+    Area_normalized = 1/np.sum(area[nlatitude-j:nlatitude]) #Area normalization is different due to a different array size
+    return mean_data * Area_normalized
+
+def calc_mean_1D_north_H_I_test(data, area):
+    nlatitude = 721
+    mean_data = 0
+    j = 0
+    for i in range(360,nlatitude):
+        if (np.isnan(data[i]) == False):
+            mean_data += area[i] * data[i]  
+            j +=1        
     Area_normalized = 1/np.sum(area[nlatitude-j:nlatitude]) #Area normalization is different due to a different array size
     return mean_data * Area_normalized
 
 def calc_mean_1D_south_H_I(data, area):
     nlatitude = data.size
     mean_data = 0
+    #area = np.flip(area, axis=0)
     j = 0
     for i in range(0,361):
         if (np.isnan(data[i]) == False):
@@ -336,7 +312,7 @@ def plot_annual_T_S_vgl(annual_temperature_og,  annual_temperature_paper):
     plt.tight_layout()
     plt.show()
     
-def plot_annual_ice_thickness_vgl(annual_ice_thickness,  annual_ice_thickness_paper):
+def plot_annual_ice_thickness_vgl(annual_ice_thickness,  annual_ice_thickness_paper, titel):
     fig, ax = plt.subplots()
 
     ntimesteps = len(annual_ice_thickness)
@@ -350,7 +326,7 @@ def plot_annual_ice_thickness_vgl(annual_ice_thickness,  annual_ice_thickness_pa
     plt.xticks(np.linspace(0, ntimesteps - 1, 5), labels)
     ax.set_ylabel("H_i")
     plt.grid()
-    plt.title("Comparison Ice Thickness")
+    plt.title(titel)
     plt.legend(loc="upper right")
 
     plt.tight_layout()
