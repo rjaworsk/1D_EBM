@@ -230,7 +230,8 @@ def calc_mean_1D_north_H_I(data, area):
     nlatitude = data.size
     mean_data = 0
     j = 0
-    for i in range(360,nlatitude):
+    equator_lat = int(nlatitude/2)
+    for i in range(equator_lat,nlatitude):
         if (np.isnan(data[i]) == False):
             mean_data += area[i] * data[i]  
             j +=1        
@@ -238,10 +239,11 @@ def calc_mean_1D_north_H_I(data, area):
     return mean_data * Area_normalized
 
 def calc_mean_1D_north_H_I_test(data, area):
-    nlatitude = 721
+    nlatitude = data.size
+    equator_lat = int(nlatitude/2)
     mean_data = 0
     j = 0
-    for i in range(360,nlatitude):
+    for i in range(equator_lat,nlatitude):
         if (np.isnan(data[i]) == False):
             mean_data += area[i] * data[i]  
             j +=1        
@@ -251,9 +253,10 @@ def calc_mean_1D_north_H_I_test(data, area):
 def calc_mean_1D_south_H_I(data, area):
     nlatitude = data.size
     mean_data = 0
+    equator_lat = int(nlatitude/2)
     #area = np.flip(area, axis=0)
     j = 0
-    for i in range(0,361):
+    for i in range(0,equator_lat+1):
         if (np.isnan(data[i]) == False):
             mean_data += area[i] * data[i]  
             j +=1

@@ -17,6 +17,7 @@ import copy
 import numpy as np
 import time
 from scipy import sparse
+from numpy import linalg as LA
 
 import Functions
 import ATM_fct
@@ -24,7 +25,7 @@ import OCN_fct
 
 class Mesh():
     def __init__(self, geo_dat):
-        self.n_latitude  = 721 #Equator is at 361
+        self.n_latitude  = 1441 #Equator is at 361
         #self.n_longitude = 128
         self.ndof = self.n_latitude **2
         self.h = np.pi / (self.n_latitude - 1)
@@ -181,7 +182,7 @@ def timestep_euler_forward_H_I(mesh,T_S, T_ATM, Fb, solar_forcing, H_I, t, delta
 
 
 def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T_OCN_0, T_S_0, P_ocn,
-                          diffusion_coeff_ocn, heat_capacity_ocn, solar_forcing_ocn, phi, true_longitude,n_timesteps, F_w, Solar_forcing_paper, max_iterations=100, rel_error=1e-7, verbose=True):
+                          diffusion_coeff_ocn, heat_capacity_ocn, solar_forcing_ocn, phi, true_longitude,n_timesteps, F_w, Solar_forcing_paper, max_iterations=100, rel_error=1e-5, verbose=True):
     # Step size
     delta_t = 1 / ntimesteps
     
@@ -247,7 +248,7 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
             
             solar_forcing_ocn  = insolation[:,t-1] * coalbedo_ocn
    
-            T_ATM[:,t] =   ATM_fct.timestep_euler_backward_atm(jacobian_atm, 1/ntimesteps, T_ATM[:,t-1], T_S[:,t-1], t, mesh, P_atm.heat_capacity, F_w)
+            T_ATM[:,t] = ATM_fct.timestep_euler_backward_atm(jacobian_atm, 1/ntimesteps, T_ATM[:,t-1], T_S[:,t-1], t, mesh, P_atm.heat_capacity, F_w)
             
             T_OCN[:,t] = OCN_fct.timestep_euler_backward_ocn(jacobian_ocn, 1 / ntimesteps, T_OCN[:,t-1], T_S[:,t-1], T_ATM[:,t-1], t, mesh, heat_capacity_ocn, solar_forcing_ocn, Fb, H_I[:,t-1])
      
@@ -260,10 +261,10 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
             T_S[:,t] = surface_temp(T_ATM[:,t], T_OCN[:,t], H_I[:,t], solar_forcing_ocn_new, phi, mesh)
            
             
-            temp_atm[t] = np.mean(T_ATM[:,t])
-            temp_ocn[t] = np.mean(T_OCN[:,t])
-            temp_s[t] = np.mean(T_S[:,t])
-            temp_H_I[t] = np.mean(H_I[:,t])
+            temp_atm[t] = Functions.calc_mean_1D(T_ATM[:,t], mesh.area)
+            temp_ocn[t] = Functions.calc_mean_1D(T_OCN[:,t], mesh.area)
+            temp_s[t] = Functions.calc_mean_1D(T_S[:,t], mesh.area)
+            temp_H_I[t] = Functions.calc_mean_1D(H_I[:,t], mesh.area)
             
         
         timer.stop("one year")
@@ -272,8 +273,11 @@ def compute_equilibrium(mesh, diffusion_coeff_atm, heat_capacity_atm, T_ATM_0, T
         avg_temperature_s = np.sum(temp_s) / ntimesteps
         avg_H_I = np.sum(temp_H_I) / ntimesteps
       
-        print("Fehler: ",np.abs(avg_H_I - old_avg_H_I))
-        if (np.abs(avg_temperature_atm - old_avg_atm) and np.abs(avg_temperature_ocn - old_avg_ocn)  and  np.abs(avg_temperature_s - old_avg_s) and np.abs(avg_H_I - old_avg_H_I)) < rel_error:
+        print("Fehler Eisdicke: ",np.abs(avg_H_I - old_avg_H_I))
+        print("Fehler ATMO: ",np.abs(avg_temperature_atm - old_avg_atm))
+        print("Fehler Surface: ",np.abs(avg_temperature_s - old_avg_s))
+        print("Fehler Ocean: ",np.abs(avg_temperature_ocn - old_avg_ocn))
+        if (np.abs(avg_temperature_atm - old_avg_atm)< rel_error) and (np.abs(avg_temperature_ocn - old_avg_ocn)< rel_error)  and  (np.abs(avg_temperature_s - old_avg_s)< rel_error) and (np.abs(avg_H_I - old_avg_H_I) < rel_error):
             # We can assume that the error is sufficiently small now.
             verbose and print("Equilibrium reached!")
             
@@ -294,7 +298,7 @@ if __name__ == '__main__':
     file_path = '/Users/ricij/Documents/Universität/Master/Masterarbeit/VL_Klimamodellierung/input/The_World128x65.dat.txt'  
     geo_dat_ = Functions.read_geography(file_path)
     
-    ntimesteps = 730 #take one timestep twice a day
+    ntimesteps = 1460 #take one timestep twice a day
     dt = 1/ ntimesteps
     #ecc= 0.016740 #old ecc
     true_longitude = Functions.calc_lambda(dt,  ntimesteps, ecc=0, per = 1.783037)
@@ -305,6 +309,8 @@ if __name__ == '__main__':
     
     mesh = Mesh(geo_dat_)
     phi = np.linspace(-np.pi/2,np.pi/2,mesh.n_latitude) #from 90° south to 90° north
+    Equator_lat = int(mesh.n_latitude/2)
+    Startday_March = 316 #for switch to January 
     phi_i_deg_n = 75 #inital value for the latitude of the ice-edge 
     phi_i_deg_s = 75 
     
@@ -318,18 +324,21 @@ if __name__ == '__main__':
     
     
     #Solar Forcing used in Paper 
-    Solar_forcing_paper_nrd = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/solar_focring_qrtdeg_halfday.txt"))
+    #Solar_forcing_paper_nrd = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/solar_focring_qrtdeg_halfday.txt"))
+    Solar_forcing_paper_nrd = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Sdata_8thdeg_qtrday.txt"))
+    #Solar_forcing_paper_nrd = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Sdata_qrtdeg_qtrday.txt"))
+   
     Solar_forcing_paper_sdl =  np.flip( Solar_forcing_paper_nrd , axis = 0)
    
      
-    S_temp = np.zeros((721,730))
-    Solar_forcing_paper = np.zeros((721,730))  
-    # S_temp[0:361,0:365] =   Solar_forcing_paper_sdl[:,365:731] #adjust for different seasons in northern and southern hemisphere
-    # S_temp[0:361,365:731] =   Solar_forcing_paper_sdl[:,0:365]
-    S_temp[0:361,:] =   Solar_forcing_paper_sdl
-    S_temp[360:723,:] =   Solar_forcing_paper_nrd[0:361,:]
-    Solar_forcing_paper[:,0:572] = S_temp[:,158:731]
-    Solar_forcing_paper[:,572:731] = S_temp[:,0:158]
+    S_temp = np.zeros((mesh.n_latitude,ntimesteps))
+    Solar_forcing_paper = np.zeros((mesh.n_latitude,ntimesteps))  
+    #S_temp[0:(Equator_lat+1),0:int(ntimesteps/2)] =   Solar_forcing_paper_sdl[:,int(ntimesteps/2):] #adjust for different seasons in northern and southern hemisphere
+    #S_temp[0:Equator_lat+1,int(ntimesteps/2):] =   Solar_forcing_paper_sdl[:,0:int(ntimesteps/2)]
+    S_temp[0:Equator_lat+1,:] =   Solar_forcing_paper_sdl
+    S_temp[Equator_lat:,:] =   Solar_forcing_paper_nrd[0:(Equator_lat+1),:]
+    Solar_forcing_paper[:,0:ntimesteps-Startday_March] = S_temp[:,Startday_March:]
+    Solar_forcing_paper[:,ntimesteps-Startday_March:] = S_temp[:,0:Startday_March]
     #Solar_forcing_paper = S_temp #für original Solar Forcing wie im Paper (Start Januar)
 
     
@@ -356,29 +365,6 @@ if __name__ == '__main__':
     
     Functions.plot_annual_temperature(T_S_0, mesh.Tf , "Surface inital temperature")
     
-
-    #inital conditions calculated in Matlab (for March) 
-    # HI_Paper= np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/HI_stepsize1.txt"))
-    # TA_Paper= np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TA_stepsize1.txt"))
-    # TML_Paper= np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TML_stepsize1.txt"))
-    # TS_Paper= np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TS_stepsize1.txt"))
-    
-    # T_ATM_0 = np.zeros(721)
-    # T_ATM_0[361:722] = TA_Paper[1:361,158]
-    # T_ATM_0[0:361] = np.flip(TA_Paper[:,158], axis=0)
-    
-    # T_OCN_0 = np.zeros(721)
-    # T_OCN_0[361:722] = TML_Paper[1:361,158]
-    # T_OCN_0[0:361] = np.flip(TML_Paper[:,158], axis=0)
-    
-    # T_S_0 = np.zeros(721)
-    # T_S_0[361:722] = TS_Paper[1:361,158]
-    # T_S_0[0:361] = np.flip(TS_Paper[:,158], axis=0)
-    
-    # H_I_0 = np.zeros(721)
-    # H_I_0[361:722] = HI_Paper[1:361,158]
-    # H_I_0[0:361] = np.flip(HI_Paper[:,158], axis=0)
-
 
     ###### run model #####
     T_ATM, T_S, T_OCN, H_I, phi_index_s, phi_index_n  = compute_equilibrium( mesh, diffusion_coeff_atm, P_atm.heat_capacity, T_ATM_0, T_OCN_0, T_S_0, P_ocn, diffusion_coeff_ocn, heat_capacity_ocn, solar_forcing_ocn, phi, true_longitude, ntimesteps, F_w , Solar_forcing_paper)
@@ -411,7 +397,7 @@ if __name__ == '__main__':
     H_I_nan = H_I
     H_I_nan[H_I_nan == 0] = np.NAN
 
-    H_I_wo_area_weighting_north = np.nanmean(H_I_nan[360:722], axis=0)  
+    H_I_wo_area_weighting_north = np.nanmean(H_I_nan[Equator_lat:], axis=0)  
     Functions.plot_ice_thickness_time(H_I_wo_area_weighting_north, np.mean(H_I_wo_area_weighting_north) , "Mean Ice Thickness North without area weighting")
     
     annual_mean_H_I_north =[Functions.calc_mean_1D_north_H_I(H_I_nan[:,t], mesh.area) for t in range(ntimesteps)]
@@ -421,66 +407,70 @@ if __name__ == '__main__':
     Functions.plot_ice_thickness_time(annual_mean_H_I_south, np.mean(annual_mean_H_I_south) , "Mean Ice Thickness South")
    
     #Plot for the ice edge latitude in the northern Hemisphere
-    latitude = np.linspace(-90,90,721)
+    latitude = np.linspace(-90,90,mesh.n_latitude)
     ice = np.zeros(phi_index_n.size)
     for i in range(phi_index_n.size):
         ice[i] = latitude[int(phi_index_n[i])]
     Functions.plot_ice_edge_time(ice, np.mean(ice) , "Ice_Edge Latitude")
     
-    # ice_s = np.zeros(phi_index_n.size)
-    # for i in range(phi_index_s.size):
-    #     ice_s[i] = latitude[int(phi_index_s[i])]
-    # ice = ice * -1    
-    # Functions.plot_ice_edge_time(ice, np.mean(ice) , "Ice_Edge Latitude South")
-    
-
     #Plot results of our model and results of the paper
     #Paper_results = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/T_S_Paper.txt") #48 timesteps 
-    Paper_results = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/T_S_361.txt") #730 timesteps 
-    Functions.plot_annual_T_S_vgl(np.mean(T_S[360:722,:], axis = 1),Paper_results[:,1])
+    # Paper_results = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/T_S_361.txt") #730 timesteps 
+    # Functions.plot_annual_T_S_vgl(np.mean(T_S[Equator_lat:,:], axis = 1),Paper_results[:,1])
     
-    #Paper_ice_thickness = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_48.txt") #48 timesteps
-    Paper_ice_thickness_without_area_weighting = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_730.txt") #730 timesteps
-    Paper_ice_thickness_with_area_weighting = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_730_w_area.txt") #730 timesteps
-    #Paper_ice_thickness_with_area_weighting_73steps = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_73_w_area.txt") #73 timesteps
+    # #Paper_ice_thickness = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_48.txt") #48 timesteps
+    # Paper_ice_thickness_without_area_weighting = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_730.txt") #730 timesteps
+    # Paper_ice_thickness_with_area_weighting = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_730_w_area.txt") #730 timesteps
+    # #Paper_ice_thickness_with_area_weighting_73steps = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Ice_thickness_73_w_area.txt") #73 timesteps
     
-    Functions.plot_annual_ice_thickness_vgl(annual_mean_H_I_north, Paper_ice_thickness_with_area_weighting[:,1], "Comparison Ice Thickness with area weighting")
-    Functions.plot_annual_ice_thickness_vgl(H_I_wo_area_weighting_north, Paper_ice_thickness_without_area_weighting[:,1], "Comparison Ice Thickness without area weighting")
+    # Functions.plot_annual_ice_thickness_vgl(annual_mean_H_I_north, Paper_ice_thickness_with_area_weighting[:,1], "Comparison Ice Thickness with area weighting")
+    # Functions.plot_annual_ice_thickness_vgl(H_I_wo_area_weighting_north, Paper_ice_thickness_without_area_weighting[:,1], "Comparison Ice Thickness without area weighting")
     
-    Ice_edge_lat_paper = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Paper_ice_edge_latitude.txt") #730 timesteps
-    #Ice_edge_lat_paper = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/ice_edge_48.txt") # hier mit nur 48 Zeitabschnitten
-    Functions.plot_annual_ice_edge_vgl(ice, Ice_edge_lat_paper[:,1])
+    # Ice_edge_lat_paper = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/Paper_ice_edge_latitude.txt") #730 timesteps
+    # #Ice_edge_lat_paper = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/ice_edge_48.txt") # hier mit nur 48 Zeitabschnitten
+    # Functions.plot_annual_ice_edge_vgl(ice, Ice_edge_lat_paper[:,1])
     
     ###### Comparison with Matlab Output ######
     
-    H_I_Paper= np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/HI_30years.txt"))
-    H_I_paper_new = np.zeros((721,730))
-    H_I_paper_new[360:722,0:572] = H_I_Paper[:,21328:21900] 
-    H_I_paper_new[360:722,572:731] = H_I_Paper[:,21170:21328]
-    #H_I_paper_new[360:722,:] = H_I_Paper[:,26280:27010] #normal Solar Forcing (starting Jan)
+    H_I_Paper= np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/HI_30years_8thdgr.txt"))
+    H_I_paper_new = np.zeros((mesh.n_latitude,ntimesteps))
+    H_I_paper_new[Equator_lat:,0:ntimesteps-Startday_March] = H_I_Paper[:,Startday_March:] 
+    H_I_paper_new[Equator_lat:,ntimesteps-Startday_March:] = H_I_Paper[:,0:Startday_March]
+    #H_I_paper_new[360:,:] = H_I_Paper[:,26280:27010] #normal Solar Forcing (starting Jan)
     H_I_paper_new[H_I_paper_new == 0] = np.NAN
     
     H_I_Paper_mean_wo_area = np.nanmean(H_I_paper_new, axis = 0)
-    H_I_Paper_mean_w_area =[Functions.calc_mean_1D_north_H_I_test(H_I_paper_new[:,t], mesh.area) for t in range(730)]
+    H_I_Paper_mean_w_area =[Functions.calc_mean_1D_north_H_I_test(H_I_paper_new[:,t], mesh.area) for t in range(ntimesteps)]
         
-   # Functions.plot_ice_thickness_time(H_I_Paper_normal_mean, np.mean(H_I_Paper) , "Mean Ice Thickness North")
+    #Functions.plot_ice_thickness_time(H_I_Paper_normal_mean, np.mean(H_I_Paper) , "Mean Ice Thickness North")
     Functions.plot_annual_ice_thickness_vgl(H_I_wo_area_weighting_north, H_I_Paper_mean_wo_area,  "Comparison Ice Thickness without area weighting and output Matlab")
     Functions.plot_annual_ice_thickness_vgl(annual_mean_H_I_north, H_I_Paper_mean_w_area, "Comparison Ice Thickness with area weighting and output Matlab")
     
-    # Comparison with Ice Edge latitude with only 73 Steps
-    j = 0
-    ice_10th = np.zeros(73)
-    for i in range(730): 
-        if i%10 == 0:
-            ice_10th[j] = ice[i]
-            j +=1
-            
-    Ice_edge_lat_paper_73 = np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/ice_edge_73.txt") # hier mit nur 48 Zeitabschnitten        
-    Functions.plot_annual_ice_edge_vgl(ice_10th, Ice_edge_lat_paper_73[:,1])
     
     #Comparison Temperature Matlab 
-    T_S_Matlab = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TS_30years.txt")) 
-    T_ML_Matlab = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TML_30years.txt")) 
-    T_A_Matlab = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TA_30years.txt")) 
+    T_S_Matlab = np.zeros((Equator_lat+1,ntimesteps))
+    T_S_Matlab[:,0:ntimesteps-Startday_March] = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TS_30years_8thdgr.txt"))[:,Startday_March:] 
+    T_S_Matlab[:,ntimesteps-Startday_March:] = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TS_30years_8thdgr.txt"))[:,:Startday_March] 
+    #T_S_Matlab = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TS_30years_qrtdgr_qrtday.txt"))
+    
+    
+    T_OCN_Matlab = np.zeros((Equator_lat+1,ntimesteps))
+    T_OCN_Matlab[:,0:ntimesteps-Startday_March] = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TML_30years_8thdgr.txt"))[:,Startday_March:] 
+    T_OCN_Matlab[:,ntimesteps-Startday_March:] = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TML_30years_8thdgr.txt"))[:,:Startday_March] 
+    
+    T_ATM_Matlab = np.zeros((Equator_lat+1,ntimesteps))
+    T_ATM_Matlab[:,0:ntimesteps-Startday_March] = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TA_30years_8thdgr.txt"))[:,Startday_March:] 
+    T_ATM_Matlab[:,ntimesteps-Startday_March:] = np.transpose(np.genfromtxt(r"/Users/ricij/Documents/Universität/Master/Masterarbeit/TA_30years_8thdgr.txt"))[:,:Startday_March] 
+    
+    #Functions.plot_temperature_time(np.mean(T_ATM_Matlab, axis=1), np.mean(T_ATM[Equator_lat:,:], axis=1), "Atmosphere Temp")
+    
+    #Norm between Matlab Temperature and Python Code
+    
+    T_S_Norm_Difference = LA.norm(np.mean(T_S_Matlab, axis=1) - np.mean(T_S[Equator_lat:,:], axis=1))
+    T_OCN_Norm_Difference = LA.norm(np.mean(T_OCN_Matlab, axis=1)  - np.mean(T_OCN[Equator_lat:,:], axis=1))
+    T_ATM_Norm_Difference =  LA.norm(np.mean(T_ATM_Matlab, axis=1)  - np.mean(T_ATM[Equator_lat:,:], axis=1))
+   
+    
+    
     
     
